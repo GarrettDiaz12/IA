@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <br>
+  <img src="2.png" align="left" alt="imagen no disponible" WIDTH =190 HEIGHT =180 >
+  <img src="1.png" align="right" alt="imagen no disponible" WIDTH =180 HEIGHT =170>
+  <br><br>
+  <title>Consulta por Voz</title>
+  <link href="datatables/datatables.min.css" rel="stylesheet">
+  <link href="bootstrap-4.3.1/css/bootstrap.min.css" rel="stylesheet">
+
+  <script src="js/jquery-3.4.1.js"></script>
+  <script src="js/popper.min.js"></script>
+  <script src="bootstrap-4.3.1/js/bootstrap.min.js"></script>
+  <script src="datatables/datatables.min.js"></script>
+</head>
+
+<body background="fondo.jpg" background-repeat: no-repeat>
+  <div class="container-fluid">
+
+    <div class="row" style="margin:1em">
+      <div class="col-12 text-center">
+        <div class="form-group">
+          <button type="button" id="Dicta" class="btn btn-success">Iniciar dictado de consulta</button>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" id="SintesisDeVoz" checked>
+          <label class="form-check-label" for="SitesisDeVoz"><FONT COLOR="magenta">Activar voz </FONT>
+            <br></label>
+        </div>
+        <div>
+          <textarea class="form-control rounded-0" id="TextArea1" rows="1" placeholder="Ingresa manualmente la placa" style="background-color: #6A6FE2;"></textarea>
+          <br>
+          <button type="button" id="Consulta" class="btn btn-success" style="margin:1em">Buscar</button>
+          <table id="tabla1" class="table  table-dark responsive" width="100%">
+          </table>
+          <div class="form-group">
+            <button type="button" class="btn btn-primary" id="BotonDetenerSintesis">Detener lectura</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <script>
+
+    document.addEventListener("DOMContentLoaded", function () {
+      $("#Consulta").hide();
+      $("#BotonDetenerSintesis").hide();
+
+      const reconocimiento = new webkitSpeechRecognition();
+      reconocimiento.lang = "es-ES";
+      reconocimiento.continuous = false;
+      reconocimiento.interimResults = true;
+      reconocimiento.onresult = function (event) {
+        document.getElementById("TextArea1").value = "";
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            document.getElementById("TextArea1").value += event.results[i][0].transcript;
+          }
+        }
+      }
+
+      $('#Dicta').click(function () {
+        reconocimiento.start();
+      });
+
+      $('#Consulta').click(function () {
+        let oracion = document.getElementById("TextArea1").value;
+        consultar(oracion);
+        if (tablacreada) {
+          $('#tabla1').DataTable().destroy();
+          $('#tabla1').empty();
+          tablacreada = false;
+        }
+        $("#Consulta").hide();
+      });
+
+      reconocimiento.onend = function (event) {
+        let oracion = document.getElementById("TextArea1").value;
+        if (tablacreada) {
+          $('#tabla1').DataTable().destroy();
+          $('#tabla1').empty();
+          tablacreada = false;
+        }
+        consultar(oracion);
+      }
+
+      var tablacreada = false;
+      var tabla1;
+      function consultar(ora) {
+        $.ajax({
+          type: 'GET',
+          url: 'consulta.php?oracion=' + ora,
+          data: '',
+          success: function (datos) {
+            console.log(datos)
+            if (datos.length > 0) {
+              if ($('#SintesisDeVoz').is(':checked'))
+                activaSintesisDeVoz(datos);
+              if (tablacreada) {
+                $('#tabla1').DataTable().destroy();
+                $('#tabla1').empty();
+              }
+              var columnas = [];
+              NombreColumna = Object.keys(datos[0]);
+              for (var i in NombreColumna) {
+                columnas.push({
+                  data: NombreColumna[i],
+                  title: primerCaracterMayuscula(NombreColumna[i])
+                });
+              }
+
+              tabla1 = $('#tabla1').DataTable({
+                data: datos,
+                columns: columnas,
+                lengthChange: false,
+                searching: false,
+                info: false,
+                paging: false,
+                ordering: false,
+                "language": {
+                  "url": "DataTables/spanish.json",
+                },
+              });
+              tablacreada = true;
+            }
+            else
+              alert("NO SE ENCONTRARON REGISTROS CON ESA PLACA");
+          },
+          error: function () {
+            if (tablacreada) {
+              tablacreada = false;
+            }
+            alert("NO SE ENCONTRARON REGISTROS CON ESA PLACA");
+          }
+        });
+      }
+
+      $("#TextArea1").focus(function () {
+        $("#Consulta").show();
+      });
+
+      function activaSintesisDeVoz(data) {
+        $("#BotonDetenerSintesis").show();
+        let speech;
+        for (let indice = 0; indice < data.length; indice++)
+          for (let [key, value] of Object.entries(data[indice])) {
+            speech = new SpeechSynthesisUtterance(key);
+            speech.lang = 'es-ES';
+            window.speechSynthesis.speak(speech);
+            speech = new SpeechSynthesisUtterance(value);
+            speech.lang = 'es-ES';
+            window.speechSynthesis.speak(speech);
+          }
+        speech.onend = function (evento) {
+          $("#BotonDetenerSintesis").hide();
+        };
+
+      }
+      
+
+      $('#BotonDetenerSintesis').click(function () {
+        window.speechSynthesis.cancel();
+        $("#BotonDetenerSintesis").hide();
+      });
+
+      //Funcion para que cada palabra en la tabla empiece con mayuscula
+      function primerCaracterMayuscula(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
+      }
+
+    });
+  </script>
+</body>
+
+</html>
